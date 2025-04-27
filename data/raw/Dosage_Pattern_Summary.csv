@@ -1,0 +1,16 @@
+Rank,Pattern,Regex (heuristic),Example,Percent of total
+0,molarity,\d+(\.\d+)?\s*(p|n|µ|u|m)?M,0.0001 mM,64.77
+1,ppm,\d+(\.\d+)?\s*ppm,7500 ppm food,10.98
+2,percent,\d+(\.\d+)?\s*%,4%,5.29
+3,µg per ml,\d+(\.\d+)?\s*µ?g/ml,0.1 µg/mL,4.53
+4,mg per ml,\d+(\.\d+)?\s*mg/ml,2.5 mg/mL,4.12
+5,other,,"0.5 mg, 5 times a week",3.65
+6,missing,,,1.75
+7,mg per 100 ml,\d+(\.\d+)?\s*mg/100\s*m[l|L],250 mg/100 mL of medium,1.52
+8,mg per kg,\d+(\.\d+)?\s*mg/kg,2 mg/kg/week,1.14
+9,mg per L,\d+(\.\d+)?\s*mg/l,10 mg/L,0.76
+10,µl per 100 ml,\d+(\.\d+)?\s*µ?l/100\s*m[l|L],4 µl/100 ml media,0.53
+11,g per L,\d+(\.\d+)?\s*g/l,0.3g/L,0.35
+12,µg per g,\d+(\.\d+)?\s*µ?g/g,1 µg/g bodyweight,0.26
+13,international units,\d+(\.\d+)?\s*iu,25000 IU,0.18
+14,ng per ml,\d+(\.\d+)?\s*ng/ml,600 ng/ml,0.18
