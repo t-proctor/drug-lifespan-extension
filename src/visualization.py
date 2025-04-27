@@ -13,6 +13,33 @@ if not os.path.exists(plots_dir):
     os.makedirs(plots_dir)
     print(f"Created directory: {plots_dir}")
 
+# --- Helper Functions ---
+
+def _format_title(col_name, prefix="Distribution of", suffix=""):
+    """Formats a column name into a plot title."""
+    formatted_name = col_name.replace("_percent", " (%)").replace("_", " ").title()
+    return f"{prefix} {formatted_name}{suffix}"
+
+def _save_plot(plt_obj, filename, directory):
+    """Saves the current matplotlib plot to a file."""
+    if not os.path.exists(directory):
+        try:
+            os.makedirs(directory)
+            print(f"  - Created directory during save: {directory}")
+        except Exception as e:
+            print(f"  - Error creating directory {directory}: {e}")
+            return # Don't attempt to save if directory creation failed
+    full_path = os.path.join(directory, filename)
+    try:
+        plt_obj.savefig(full_path)
+        print(f"  - Saved plot to {full_path}")
+    except Exception as e:
+        print(f"  - Error saving plot {full_path}: {e}")
+    finally:
+        plt_obj.close() # Ensure plot is closed even if save fails
+
+
+# --- Data Loading ---
 print("--- Loading Processed Data ---")
 processed_data_path = '../data/processed/processed_drugage.pkl' # NEW PATH
 try:
@@ -41,73 +68,73 @@ categorical_cols = ['species', 'gender', 'ITP']
 print("\n--- Generating Lifespan Distribution Plots ---")
 plt.figure(figsize=(14, 6))
 plot_successful_lifespan = False
-for i, col in enumerate(lifespan_cols):
-    if col in df.columns and pd.api.types.is_numeric_dtype(df[col]) and df[col].notna().any():
-        plt.subplot(1, len(lifespan_cols), i + 1)
-        # Handle potential infinite values if any survived processing (unlikely but safe)
+subplot_index = 1
+num_lifespan_cols = len(lifespan_cols) # Calculate once
+
+for col in lifespan_cols:
+    if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+        # Handle potential infinite values and NaNs
         data_to_plot = df[col].replace([np.inf, -np.inf], np.nan).dropna()
+
         if not data_to_plot.empty:
+            plt.subplot(1, num_lifespan_cols, subplot_index)
             sns.histplot(data_to_plot, kde=True, bins=50)
-            plot_title = f'Distribution of {col.replace("_percent", " (%)").replace("_", " ").title()}'
+            plot_title = _format_title(col, prefix="Distribution of")
             plt.title(plot_title)
             print(f"  - Plotting: {plot_title}")
             plot_successful_lifespan = True
+            subplot_index += 1
         else:
              print(f"  - Skipping plot for column '{col}' (no valid data after dropping NaN/inf).")
     else:
-        print(f"  - Skipping plot for non-numeric, missing, or empty column: {col}")
+        print(f"  - Skipping plot for non-numeric or missing column: {col}")
+
 
 if plot_successful_lifespan:
     plt.tight_layout()
-    plot_filename = os.path.join(plots_dir, 'lifespan_change_distribution.png')
-    try:
-        plt.savefig(plot_filename)
-        print(f"  - Saved plot to {plot_filename}")
-    except Exception as e:
-        print(f"  - Error saving plot {plot_filename}: {e}")
-    plt.close()
+    plot_filename = 'lifespan_change_distribution.png'
+    _save_plot(plt, plot_filename, plots_dir) # Use helper function
 else:
     print("  - No valid lifespan columns to plot.")
+    plt.close() # Close the figure if nothing was plotted
 
 
 # 2. Counts of Categorical Features
 print("\n--- Generating Categorical Count Plots ---")
 for col in categorical_cols:
     if col in df.columns and df[col].notna().any():
-        plt.figure(figsize=(10, 8))
-        top_n = 20
         # Use the data as loaded (should be appropriate type from pickle)
         col_data = df[col].dropna()
         if col_data.empty:
             print(f"  - Skipping count plot for empty column: {col}")
-            plt.close()
             continue
 
         # Convert to string for consistent counting/plotting if mixed types exist
         col_data = col_data.astype(str)
         value_counts = col_data.value_counts()
 
+        plt.figure(figsize=(10, 8))
+        top_n = 20
+        plot_title = _format_title(col, prefix="") # Default prefix is Distribution of, override
+
         if len(value_counts) > top_n:
             top_categories = value_counts.nlargest(top_n).index
-            # Filter the original DataFrame for plotting
-            data_to_plot = df[df[col].isin(top_categories)][col].astype(str) # Ensure string type for plotting
+            # Filter the original DataFrame for plotting using the string version
+            data_to_plot = col_data[col_data.isin(top_categories)]
             sns.countplot(y=data_to_plot, order=top_categories)
-            plt.title(f'Top {top_n} {col.replace("_", " ").title()} Counts')
-            print(f"  - Plotting: Top {top_n} {col.title()} Counts (limited due to high cardinality)")
+            plot_title = _format_title(col, prefix=f"Top {top_n}", suffix=" Counts")
+            print(f"  - Plotting: {plot_title} (limited due to high cardinality)")
         else:
             order = value_counts.index
             sns.countplot(y=col_data, order=order)
-            plt.title(f'{col.replace("_", " ").title()} Counts')
-            print(f"  - Plotting: {col.title()} Counts")
+            plot_title = _format_title(col, prefix="", suffix=" Counts") # Ensure suffix is correct
+            print(f"  - Plotting: {plot_title}")
 
+        plt.title(plot_title)
         plt.tight_layout()
-        plot_filename = os.path.join(plots_dir, f'{col}_counts.png')
-        try:
-            plt.savefig(plot_filename)
-            print(f"  - Saved plot to {plot_filename}")
-        except Exception as e:
-             print(f"  - Error saving plot {plot_filename}: {e}")
-        plt.close()
+        plot_filename = f'{col}_counts.png'
+        _save_plot(plt, plot_filename, plots_dir) # Use helper function
+
     else:
          print(f"  - Skipping count plot for missing or empty column: {col}")
 
@@ -116,65 +143,68 @@ for col in categorical_cols:
 print("\n--- Generating Lifespan Change vs Categorical Plots ---")
 for cat_col in categorical_cols:
     # Ensure categorical column exists and has data
-    if cat_col in df.columns and df[cat_col].notna().any():
-        for life_col in lifespan_cols:
-             # Ensure lifespan column exists, is numeric, and has data
-             if life_col in df.columns and pd.api.types.is_numeric_dtype(df[life_col]) and df[life_col].notna().any():
-                plt.figure(figsize=(12, 9))
-                top_n = 15
-                # Ensure grouping works correctly by handling potential NaN/inf in life_col
-                # and ensuring cat_col is suitable for grouping (string usually best)
-                df_clean = df[[cat_col, life_col]].copy()
-                df_clean[cat_col] = df_clean[cat_col].astype(str) # Ensure string type for reliable grouping
-                df_clean = df_clean.replace([np.inf, -np.inf], np.nan).dropna()
-
-
-                if df_clean[cat_col].nunique() > top_n:
-                    # Calculate median on cleaned data
-                    median_values = df_clean.groupby(cat_col)[life_col].median()
-                    if not median_values.empty:
-                        # Get top N categories based on median lifespan change
-                        top_categories = median_values.nlargest(top_n).index
-                        # Filter the cleaned data for plotting
-                        df_filtered = df_clean[df_clean[cat_col].isin(top_categories)]
-                        if not df_filtered.empty:
-                             # Plot using the filtered data
-                             sns.boxplot(data=df_filtered, y=cat_col, x=life_col, order=top_categories)
-                             plt.title(f'{life_col.replace("_percent", " (%)").title()} by Top {top_n} {cat_col.title()}')
-                             print(f"  - Plotting: {life_col.title()} by Top {top_n} {cat_col.title()} (Boxplot)")
-                        else:
-                             print(f"  - Skipping boxplot for {life_col} vs {cat_col} (No data after filtering top categories)")
-                             plt.close()
-                             continue
-                    else:
-                        print(f"  - Skipping boxplot for {life_col} vs {cat_col} (Could not calculate medians)")
-                        plt.close()
-                        continue
-
-                else: # Fewer than top_n categories
-                    if not df_clean.empty:
-                        # Order by median lifespan change
-                        order = df_clean.groupby(cat_col)[life_col].median().sort_values(ascending=False).index
-                        sns.boxplot(data=df_clean, y=cat_col, x=life_col, order=order)
-                        plt.title(f'{life_col.replace("_percent", " (%)").title()} by {cat_col.title()}')
-                        print(f"  - Plotting: {life_col.title()} by {cat_col.title()} (Boxplot)")
-                    else:
-                         print(f"  - Skipping boxplot for {life_col} vs {cat_col} (No valid data)")
-                         plt.close()
-                         continue
-
-                plt.tight_layout()
-                plot_filename = os.path.join(plots_dir, f'{life_col}_vs_{cat_col}_boxplot.png')
-                try:
-                    plt.savefig(plot_filename)
-                    print(f"  - Saved plot to {plot_filename}")
-                except Exception as e:
-                    print(f"  - Error saving plot {plot_filename}: {e}")
-                plt.close()
-             else:
-                 print(f"  - Skipping boxplot for {life_col} vs {cat_col} (Lifespan column missing, non-numeric, or empty)")
-    else:
+    if cat_col not in df.columns or df[cat_col].isnull().all():
         print(f"  - Skipping boxplots involving {cat_col} (Categorical column missing or empty)")
+        continue
+
+    for life_col in lifespan_cols:
+         # Ensure lifespan column exists, is numeric, and has data
+        if life_col not in df.columns or not pd.api.types.is_numeric_dtype(df[life_col]) or df[life_col].isnull().all():
+            print(f"  - Skipping boxplot for {life_col} vs {cat_col} (Lifespan column missing, non-numeric, or empty)")
+            continue
+
+        # Prepare data: clean NaNs/infs, ensure string type for category
+        df_clean = df[[cat_col, life_col]].copy()
+        df_clean[cat_col] = df_clean[cat_col].astype(str) # Ensure string type for reliable grouping
+        df_clean = df_clean.replace([np.inf, -np.inf], np.nan).dropna()
+
+        if df_clean.empty:
+            print(f"  - Skipping boxplot for {life_col} vs {cat_col} (No valid data after cleaning)")
+            continue
+
+        plt.figure(figsize=(12, 9))
+        top_n = 15
+        order = None
+        plot_title_prefix = _format_title(life_col, prefix="", suffix="") # Get formatted lifespan col name
+        plot_title_suffix = f" by {cat_col.title()}"
+        print_prefix = f"  - Plotting: {plot_title_prefix} by"
+
+        # Determine categories and order for plotting
+        unique_categories = df_clean[cat_col].nunique()
+        median_values = df_clean.groupby(cat_col)[life_col].median()
+
+        if median_values.empty:
+            print(f"  - Skipping boxplot for {life_col} vs {cat_col} (Could not calculate medians for ordering/filtering)")
+            plt.close()
+            continue
+
+        if unique_categories > top_n:
+            # Get top N categories based on median lifespan change
+            top_categories = median_values.nlargest(top_n).index
+            # Filter the cleaned data for plotting
+            df_plot = df_clean[df_clean[cat_col].isin(top_categories)]
+            order = top_categories # Order should match the filtered categories
+            plot_title_suffix = f" by Top {top_n} {cat_col.title()}"
+            print_prefix = f"  - Plotting: {plot_title_prefix} by Top {top_n}"
+            print(f"{print_prefix} {cat_col.title()} (Boxplot)")
+
+        else: # Fewer than top_n categories
+            # Order by median lifespan change (descending)
+            order = median_values.sort_values(ascending=False).index
+            df_plot = df_clean # Use all cleaned data
+            print(f"{print_prefix} {cat_col.title()} (Boxplot)")
+
+        # Generate the plot if data exists
+        if not df_plot.empty:
+            sns.boxplot(data=df_plot, y=cat_col, x=life_col, order=order)
+            plt.title(f"{plot_title_prefix}{plot_title_suffix}")
+            plt.tight_layout()
+            plot_filename = f'{life_col}_vs_{cat_col}_boxplot.png'
+            _save_plot(plt, plot_filename, plots_dir)
+        else:
+            # This case might occur if top_n filtering resulted in empty df_plot
+            print(f"  - Skipping boxplot for {life_col} vs {cat_col} (No data after filtering top categories)")
+            plt.close()
 
 
 print("\n--- Visualization Script Finished ---") 
