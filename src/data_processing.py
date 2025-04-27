@@ -40,7 +40,7 @@ DOSAGE_PATTERNS = {
 }
 
 # Configure visualization style
-sns.set(style="whitegrid")
+sns.set_theme(style="whitegrid")
 
 # --- Helper Functions ---
 

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import os
 
 # Configure visualization style
-sns.set(style="whitegrid")
+sns.set_theme(style="whitegrid")
 
 # Define output directory for plots (relative to this script)
 plots_dir = '../reports/figures' # NEW PATH
