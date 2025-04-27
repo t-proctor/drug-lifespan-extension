@@ -6,28 +6,35 @@ import re
 DOSAGE_VALUE_COL = 'dosage_value'
 DOSAGE_UNIT_COL = 'dosage_unit'
 
+# Updated: Anchored pattern
 MOLARITY_RE = re.compile(
-    r"(?P<value>\d+\.?\d*)\s*(?P<prefix>[pnuµm]?)(?P<unit>M)\\b",
+    r"^(?P<value>\d+\.?\d*)\s*(?P<prefix>[pnuµm]?)\s*(?P<unit>M)(?:\s|\b)", # Updated: Anchored
     re.IGNORECASE
 )
 MOLARITY_PREFIX_FACTORS = {
     "p": 1e-12, "n": 1e-9, "µ": 1e-6, "u": 1e-6, "m": 1e-3, "": 1.0
 }
-# Order matters: More specific patterns first might be better, but using original order.
-# Consider reviewing pattern overlaps if needed.
+
+# Updated: All patterns anchored (^) and allow trailing non-captured space/boundary ((?:\s|\b))
+# Added patterns for mg, ug/ml (fixed), µmol/L, g/kg
 DOSAGE_PATTERNS = {
-    "ppm":           re.compile(r"(?P<value>\d+\.?\d*)\s*ppm", re.IGNORECASE),
-    "percent":       re.compile(r"(?P<value>\d+\.?\d*)\s*%", re.IGNORECASE),
-    "µg_per_ml":     re.compile(r"(?P<value>\d+\.?\d*)\s*µ?g/ml", re.IGNORECASE),
-    "mg_per_ml":     re.compile(r"(?P<value>\d+\.?\d*)\s*mg/ml", re.IGNORECASE),
-    "mg_per_100ml":  re.compile(r"(?P<value>\d+\.?\d*)\s*mg/100\s*m[l|L]", re.IGNORECASE),
-    "mg_per_kg":     re.compile(r"(?P<value>\d+\.?\d*)\s*mg/kg", re.IGNORECASE),
-    "mg_per_L":      re.compile(r"(?P<value>\d+\.?\d*)\s*mg/l", re.IGNORECASE),
-    "µl_per_100ml":  re.compile(r"(?P<value>\d+\.?\d*)\s*µ?l/100\s*m[l|L]", re.IGNORECASE),
-    "g_per_L":       re.compile(r"(?P<value>\d+\.?\d*)\s*g/l", re.IGNORECASE),
-    "µg_per_g":      re.compile(r"(?P<value>\d+\.?\d*)\s*µ?g/g", re.IGNORECASE),
-    "iu":            re.compile(r"(?P<value>\d+\.?\d*)\s*iu", re.IGNORECASE),
-    "ng_per_ml":     re.compile(r"(?P<value>\d+\.?\d*)\s*ng/ml", re.IGNORECASE),
+    "ppm":           re.compile(r"^(?P<value>\d+\.?\d*)\s*ppm(?:\s|\b)", re.IGNORECASE),
+    "percent":       re.compile(r"^(?P<value>\d+\.?\d*)\s*%(?:\s|\b)", re.IGNORECASE),
+    "µg_per_ml":     re.compile(r"^(?P<value>\d+\.?\d*)\s*u?g/ml(?:\s|\b)", re.IGNORECASE), # Use u? explicitly
+    "mg_per_ml":     re.compile(r"^(?P<value>\d+\.?\d*)\s*mg/ml(?:\s|\b)", re.IGNORECASE),
+    "mg_per_100ml":  re.compile(r"^(?P<value>\d+\.?\d*)\s*mg/100\s*m[l|L](?:\s|\b)", re.IGNORECASE),
+    "mg_per_kg":     re.compile(r"^(?P<value>\d+\.?\d*)\s*mg/kg(?:\s|\b)", re.IGNORECASE),
+    "mg_per_L":      re.compile(r"^(?P<value>\d+\.?\d*)\s*mg/l(?:\s|\b)", re.IGNORECASE),
+    "µl_per_100ml":  re.compile(r"^(?P<value>\d+\.?\d*)\s*u?l/100\s*m[l|L](?:\s|\b)", re.IGNORECASE),
+    "g_per_L":       re.compile(r"^(?P<value>\d+\.?\d*)\s*g/l(?:\s|\b)", re.IGNORECASE),
+    "µg_per_g":      re.compile(r"^(?P<value>\d+\.?\d*)\s*u?g/g(?:\s|\b)", re.IGNORECASE),
+    "iu":            re.compile(r"^(?P<value>\d+\.?\d*)\s*iu(?:\s|\b)", re.IGNORECASE),
+    "ng_per_ml":     re.compile(r"^(?P<value>\d+\.?\d*)\s*ng/ml(?:\s|\b)", re.IGNORECASE),
+    # --- New/Modified Patterns ---
+    "mg":            re.compile(r"^(?P<value>\d+\.?\d*)\s*mg(?:\s|\b)", re.IGNORECASE),
+    "µmol_per_L":    re.compile(r"^(?P<value>\d+\.?\d*)\s*u?mol/L(?:\s|\b)", re.IGNORECASE),
+    "g_per_kg":      re.compile(r"^(?P<value>\d+\.?\d*)\s*g/kg(?:\s|\b)", re.IGNORECASE),
+    # Consider adding 'ug' if needed: re.compile(r"^(?P<value>\d+\.?\d*)\s*ug(?:\s|\b)", re.IGNORECASE)
 }
 
 
@@ -82,28 +89,33 @@ def parse_dosage_column(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
     df_parsed = df.copy()
 
     def parse_single_dosage(s):
-        # 1. Handle NaN/empty input
-        if pd.isna(s) or (isinstance(s, str) and not s.strip()):
+        # 1. Handle NaN/empty/literal 'nan' input
+        # Check for actual NaN first, then check for empty string or literal 'nan' string
+        if pd.isna(s) or (isinstance(s, str) and (not s.strip() or s.strip().lower() == 'nan')):
             return np.nan, "missing"
 
+        # Ensure input is string for regex/parsing helpers
+        s_str = str(s)
+
         # 2. Try molarity parser (returns standardized value in M)
-        std_molar_value, _ = _parse_molarity(str(s)) # Ensure input is string
+        std_molar_value, _ = _parse_molarity(s_str)
         if std_molar_value is not None:
-            return std_molar_value, "molarity" # Unit category is 'molarity'
+            return std_molar_value, "molarity"
 
         # 3. Try other parsers
-        other_value, unit_category = _parse_other_dosage(str(s)) # Ensure input is string
+        other_value, unit_category = _parse_other_dosage(s_str)
         if other_value is not None:
             if unit_category and "error" in unit_category:
-                 return np.nan, unit_category # Pass through specific error code
+                 return np.nan, unit_category
             else:
-                 return other_value, unit_category # Successfully parsed non-molarity unit
+                 return other_value, unit_category
 
         # 4. If nothing matched, mark as unknown
         return np.nan, "unknown"
 
     # Apply the combined parser
-    parsed_results = df_parsed[col_name].astype(str).apply(parse_single_dosage)
+    # Convert to string first to handle potential non-string types and ensure apply works
+    parsed_results = df_parsed[col_name].apply(parse_single_dosage)
     df_parsed[[DOSAGE_VALUE_COL, DOSAGE_UNIT_COL]] = pd.DataFrame(parsed_results.tolist(), index=df_parsed.index)
 
     # --- Report Summary Statistics ---

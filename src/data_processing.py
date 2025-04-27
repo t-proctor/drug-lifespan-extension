@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import seaborn as sns
-# import matplotlib.pyplot as plt # Removed as it's not used directly
 import os
 import re
 import sys # For exit
@@ -9,9 +8,16 @@ import sys # For exit
 # Import dosage parsing logic
 from .dosage_parser import parse_dosage_column, DOSAGE_VALUE_COL, DOSAGE_UNIT_COL
 
+# Determine the script's directory
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR) # Assumes src is one level down from root
+
 # --- Constants ---
-RAW_DATA_PATH = '../data/raw/drugage.csv'
-PROCESSED_DATA_PATH = '../data/processed/processed_drugage.pkl'
+# RAW_DATA_PATH = '../data/raw/drugage.csv' # Original relative path
+# PROCESSED_DATA_PATH = '../data/processed/processed_drugage.pkl' # Original relative path
+RAW_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'raw', 'drugage.csv')
+# PROCESSED_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'processed_drugage.pkl')
+PROCESSED_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'processed_drugage.csv') # Changed to CSV
 NUMERIC_COLS_TO_CONVERT = ['avg_lifespan_change_percent', 'max_lifespan_change_percent', 'weight_change_percent']
 DOSAGE_COL = 'dosage'
 # DOSAGE_VALUE_COL = 'dosage_value' # Moved to dosage_parser
@@ -110,7 +116,7 @@ def impute_encode_dosage(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def save_data(df: pd.DataFrame, filepath: str):
-    """Saves the processed DataFrame to a pickle file."""
+    """Saves the processed DataFrame to a CSV file."""
     print("\n--- Saving Processed Data ---")
     # Ensure the directory exists
     output_dir = os.path.dirname(filepath)
@@ -124,7 +130,8 @@ def save_data(df: pd.DataFrame, filepath: str):
             # sys.exit(1)
 
     try:
-        df.to_pickle(filepath)
+        # df.to_pickle(filepath)
+        df.to_csv(filepath, index=False) # Changed to to_csv
         print(f"Processed data saved successfully to {filepath}")
     except Exception as e:
         print(f"Error saving processed data to {filepath}: {e}")
