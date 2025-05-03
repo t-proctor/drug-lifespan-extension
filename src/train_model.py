@@ -215,60 +215,6 @@ def main():
     print(f"***** Tuned HGB R-squared (Test): {r2_best:.4f} *****")
     print(f"***** Tuned HGB RMSE (Test): {rmse_best:.4f} *****")
 
-    # --- SHAP Analysis (Using the Best Model) ---
-    print("\n--- Calculating SHAP Values for Best Model ---")
-    # Apply preprocessor from the best pipeline
-    try:
-        print("Transforming test data using best model's preprocessor...")
-        X_test_processed = best_model.named_steps['preprocess'].transform(
-            X_test)
-        print(f"Processed test data shape for SHAP: {X_test_processed.shape}")
-
-        # Get feature names
-        feature_names_out = (
-            best_model.named_steps['preprocess'].get_feature_names_out()
-        )
-        print(
-            f"Retrieved {len(feature_names_out)} feature names "
-            "after preprocess."
-        )
-
-        if (feature_names_out is not None and
-                len(feature_names_out) == X_test_processed.shape[1]):
-            X_test_processed_df = pd.DataFrame(
-                X_test_processed, columns=feature_names_out, index=X_test.index
-            )
-        else:
-            print(
-                "Warning: Processed feature names mismatch or unavailable. "
-                "SHAP plot may lack names."
-            )
-            X_test_processed_df = pd.DataFrame(
-                X_test_processed, index=X_test.index
-            )
-
-    except Exception as e:
-        print(
-            "Error during preprocessing or feature name retrieval for SHAP: "
-            f"{e}", file=sys.stderr
-        )
-        sys.exit(1)
-
-    # Use TreeExplainer with the regressor from the best pipeline
-    print("Creating SHAP explainer...")
-    explainer = shap.TreeExplainer(best_model.named_steps['regressor'])
-    print("Calculating SHAP values for the test set...")
-    shap_values = explainer.shap_values(X_test_processed)
-
-    print("Generating SHAP summary plot...")
-    shap.summary_plot(shap_values, X_test_processed_df, show=False)
-
-    shap_plot_filename = "shap_summary_tuned.png"
-    shap_plot_path = os.path.join(MODEL_OUTPUT_DIR, shap_plot_filename)
-    plt.savefig(shap_plot_path, bbox_inches='tight')
-    print(f"SHAP summary plot saved to {shap_plot_path}")
-    plt.close()
-
     # --- Save Best Model ---
     model_filename = "best_tuned_model.joblib"
     model_path = os.path.join(MODEL_OUTPUT_DIR, model_filename)
