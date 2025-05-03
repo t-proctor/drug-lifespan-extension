@@ -243,7 +243,6 @@ for cat_col in categorical_cols:
 # 4. Model Performance Comparison Plots
 print("\n--- Generating Model Performance Comparison Plots ---")
 
-# Data from user message (RMSE needs to be converted to MSE)
 # | Model Name               | R² (Test) | RMSE (Test) |
 # |--------------------------|-----------|-------------|
 # | drugage_only_untuned     | 0.1971    | 18.3527     |
