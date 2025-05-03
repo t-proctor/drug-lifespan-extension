@@ -254,34 +254,29 @@ def save_data(df: pd.DataFrame, filepath: str):
 
 
 # --- New Function for Descriptor Handling ---
-def handle_descriptors(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
-    """Handles missing descriptor values based on the chosen strategy."""
-    print(f"\n--- Handling Missing Descriptors (Strategy: {strategy}) ---")
+def handle_descriptors(df: pd.DataFrame) -> pd.DataFrame:
+    """Handles missing descriptor values using median imputation."""
+    print(f"\n--- Handling Missing Descriptors (Imputation Strategy) ---")
     df_processed = df.copy()
     missing_before = df_processed[DESCRIPTOR_COLS].isnull().sum()
     print("Missing descriptor values before handling:")
     print(missing_before[missing_before > 0])
 
-    if strategy == 'drop':
-        initial_rows = len(df_processed)
-        df_processed.dropna(subset=DESCRIPTOR_COLS, inplace=True)
-        rows_dropped = initial_rows - len(df_processed)
-        print(f"Dropped {rows_dropped} rows with missing descriptor values.")
-    elif strategy == 'impute':
-        imputed_count = 0
-        for col in DESCRIPTOR_COLS:
-            if df_processed[col].isnull().any():
-                median_val = df_processed[col].median()
-                count = df_processed[col].isnull().sum()
-                print(
-                    f"  - Imputing {count} missing values in '{col}' with "
-                    f"median ({median_val:.4g})"
-                )
-                df_processed[col].fillna(median_val, inplace=True)
-                imputed_count += count
+    imputed_count = 0
+    for col in DESCRIPTOR_COLS:
+        if df_processed[col].isnull().any():
+            median_val = df_processed[col].median()
+            count = df_processed[col].isnull().sum()
+            print(
+                f"  - Imputing {count} missing values in '{col}' with "
+                f"median ({median_val:.4g})"
+            )
+            df_processed[col].fillna(median_val, inplace=True)
+            imputed_count += count
+    if imputed_count > 0:
         print(f"Imputed a total of {imputed_count} missing descriptor values.")
     else:
-        print(f"Warning: Unknown strategy '{strategy}'. No action taken.")
+        print("No missing descriptor values found to impute.")
 
     missing_after = df_processed[DESCRIPTOR_COLS].isnull().sum().sum()
     print(f"Total missing descriptor values after handling: {missing_after}")
@@ -293,8 +288,7 @@ def handle_descriptors(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
 def main():
     """Main function to run the data processing pipeline."""
     parser = argparse.ArgumentParser(
-        description="Process drug lifespan data, handling "
-        "chemical descriptors."
+        description="Process drug lifespan data, imputing missing descriptors."
     )
     parser.add_argument(
         '--input_path',
@@ -305,23 +299,13 @@ def main():
     parser.add_argument(
         '--output_path',
         type=str,
-        required=True,
-        help="Path to save the processed output PKL file."
-    )
-    parser.add_argument(
-        '--strategy',
-        type=str,
-        choices=['drop', 'impute'],
-        default='impute',
-        help=(
-            "Strategy to handle missing descriptors ('drop' or 'impute', "
-            "default: impute)"
-        )
+        default=PROCESSED_DATA_PATH,
+        help=f"Path to save the processed output PKL file (default: {PROCESSED_DATA_PATH})"
     )
 
     args = parser.parse_args()
 
-    print(f"Starting data processing with strategy: {args.strategy}")
+    print(f"Starting data processing (Imputation strategy for descriptors)")
     print(f"Input file: {args.input_path}")
     print(f"Output file: {args.output_path}")
 
@@ -331,8 +315,8 @@ def main():
 
     display_basic_info(df)
 
-    # Handle descriptors first
-    df_handled = handle_descriptors(df, args.strategy)
+    # Handle descriptors
+    df_handled = handle_descriptors(df)
 
     # Continue with existing pipeline steps
     df_cleaned = clean_numeric_columns(df_handled, NUMERIC_COLS_TO_CONVERT)

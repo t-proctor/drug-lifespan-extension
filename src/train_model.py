@@ -33,27 +33,14 @@ def main():
         '--input_path', type=str, required=True,
         help="Path to the processed input PKL file."
     )
-    parser.add_argument(
-        '--data_source', type=str,
-        choices=['with_descriptors', 'no_descriptors'],
-        default='with_descriptors',
-        help="Specify data: 'with_descriptors' or 'no_descriptors' (default)."
-    )
     args = parser.parse_args()
 
-    # Define output directory based on data source
-    if args.data_source == 'with_descriptors':
-        MODEL_OUTPUT_DIR = 'models/drug_age_w_descriptors_tuned'
-    elif args.data_source == 'no_descriptors':
-        MODEL_OUTPUT_DIR = 'models/drug_age_only_tuned'
-    else:
-        raise ValueError(f"Invalid data_source: {args.data_source}")
+    MODEL_OUTPUT_DIR = 'models/drug_age_w_descriptors_tuned'
 
     os.makedirs(MODEL_OUTPUT_DIR, exist_ok=True)
 
     print("--- Starting Model Training & Tuning ---")
     print(f"Input data file: {args.input_path}")
-    print(f"Data source type: {args.data_source}")
     print(f"Output directory: {MODEL_OUTPUT_DIR}")
     print(f"Tuning iterations: {N_TUNING_ITER}, CV folds: {N_CV_FOLDS}")
 
@@ -72,22 +59,6 @@ def main():
         sys.exit(1)
 
     print(f"Data loaded successfully. Shape: {df.shape}")
-
-    # --- Conditionally Drop Descriptors ---
-    if args.data_source == 'no_descriptors':
-        cols_to_drop = [col for col in DESCRIPTOR_COLS if col in df.columns]
-        if cols_to_drop:
-            print(
-                f"Data source is '{args.data_source}'. Dropping descriptor "
-                f"columns: {cols_to_drop}..."
-            )
-            df = df.drop(columns=cols_to_drop)
-            print(f"DataFrame shape after dropping descriptors: {df.shape}")
-        else:
-            print(
-                f"Data source is '{args.data_source}', but no descriptor "
-                "columns found to drop."
-            )
 
     if TARGET_COL not in df.columns:
         print(
