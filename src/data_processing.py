@@ -3,28 +3,25 @@ import numpy as np
 import seaborn as sns
 import os
 import re
-import sys # For exit
-import argparse # Added import
-from sklearn.preprocessing import StandardScaler # Added import
+import sys
+import argparse
+from sklearn.preprocessing import StandardScaler
 
 # Import dosage parsing logic
 from dosage_parser import parse_dosage_column, DOSAGE_VALUE_COL, DOSAGE_UNIT_COL
 
 # Determine the script's directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR) # Assumes src is one level down from root
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 # --- Constants ---
-# RAW_DATA_PATH = '../data/raw/drugage.csv' # Original relative path
-# PROCESSED_DATA_PATH = '../data/processed/processed_drugage.pkl' # Original relative path
-RAW_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'drug_descriptors.csv') # Updated input path
-# PROCESSED_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'processed_drugage.pkl')
-PROCESSED_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'processed_drugage.pkl') # Default output, but will be overridden by args
+RAW_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'drug_descriptors.csv')
+PROCESSED_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'processed_drugage.pkl')
 NUMERIC_COLS_TO_CONVERT = ['avg_lifespan_change_percent', 'max_lifespan_change_percent', 'weight_change_percent']
-DESCRIPTOR_COLS = ['LogP', 'TPSA', 'MolWt', 'NumHDonors', 'NumHAcceptors'] # Added descriptor columns
+DESCRIPTOR_COLS = ['LogP', 'TPSA', 'MolWt', 'NumHDonors', 'NumHAcceptors']
 DOSAGE_COL = 'dosage'
-TARGET_COL = 'avg_lifespan_change_percent' # Define target column
-STRAIN_COL = 'strain' # Define strain column
+TARGET_COL = 'avg_lifespan_change_percent'
+STRAIN_COL = 'strain'
 TOP_K_STRAIN = 15 # Define K for strain processing
 
 # List of columns to eventually keep for modeling based on the plan
@@ -51,7 +48,7 @@ def load_data(filepath: str) -> pd.DataFrame | None:
         return df
     except FileNotFoundError:
         print(f"Error: {filepath} not found. Make sure the raw data exists.")
-        sys.exit(1) # Use sys.exit for cleaner exit
+        sys.exit(1)
     except Exception as e:
         print(f"Error loading data from {filepath}: {e}")
         sys.exit(1)
@@ -69,12 +66,11 @@ def clean_numeric_columns(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     """Converts specified columns to numeric, handling errors."""
     print("\n--- Data Cleaning: Numeric Conversion ---")
     print(f"Attempting to convert columns to numeric: {cols}")
-    df_cleaned = df.copy() # Avoid SettingWithCopyWarning
+    df_cleaned = df.copy()
     for col in cols:
         if col in df_cleaned.columns:
             original_missing = df_cleaned[col].isnull().sum()
             # Ensure the column is treated as string before potential conversion issues
-            # Using pd.to_numeric directly often handles this, but astype(str) is safer
             df_cleaned[col] = df_cleaned[col].astype(str)
             df_cleaned[col] = pd.to_numeric(df_cleaned[col], errors='coerce')
             new_missing = df_cleaned[col].isnull().sum()
@@ -106,9 +102,6 @@ def impute_encode_dosage(df: pd.DataFrame) -> pd.DataFrame:
 
     # Impute numerical NaNs with a distinct value (-1)
     if df_processed[DOSAGE_VALUE_COL].isnull().any():
-        # median_dosage = df_processed[DOSAGE_VALUE_COL].median()
-        # print(f"Imputing {df_processed[DOSAGE_VALUE_COL].isnull().sum()} missing dosage values with median ({median_dosage:.4g})")
-        # df_processed[DOSAGE_VALUE_COL].fillna(median_dosage, inplace=True)
         num_missing = df_processed[DOSAGE_VALUE_COL].isnull().sum()
         distinct_value = -1
         print(f"Imputing {num_missing} missing dosage values with distinct value ({distinct_value})")
@@ -117,21 +110,16 @@ def impute_encode_dosage(df: pd.DataFrame) -> pd.DataFrame:
         print("No missing dosage values to impute.")
 
     # Check for unexpected nulls in dosage_unit before encoding
-    # Expected categories at this point: 'molarity', 'ppm', ..., 'missing', 'unknown', 'error_*'
     if df_processed[DOSAGE_UNIT_COL].isnull().any():
          print(f"Warning: Found {df_processed[DOSAGE_UNIT_COL].isnull().sum()} unexpected nulls in {DOSAGE_UNIT_COL}. Filling with 'unknown'.")
          df_processed[DOSAGE_UNIT_COL].fillna('unknown', inplace=True) # Impute unexpected nulls
 
     # One-hot encode the dosage unit categories
     print("One-hot encoding dosage units...")
-    # dummy_na=False: Don't create a separate column for NaN units
-    # We handle 'missing' and 'unknown' explicitly if needed later.
     df_processed = pd.get_dummies(df_processed, columns=[DOSAGE_UNIT_COL], prefix='dose', dummy_na=False)
     print("Columns after one-hot encoding dosage units:", df_processed.columns.tolist())
 
     # Scale the dosage value column
-    # Scaling helps algorithms handle features with different ranges/distributions,
-    # especially important here as dosage_value contains values from originally different units.
     print(f"Applying StandardScaler to '{DOSAGE_VALUE_COL}'.")
     scaler = StandardScaler()
     # Reshape is needed as scaler expects 2D array: [n_samples, n_features]
@@ -155,16 +143,13 @@ def finalize_for_modeling(df: pd.DataFrame) -> pd.DataFrame:
 
     # 2. Process 'strain' column
     print(f"Processing '{STRAIN_COL}' column: Normalizing case, imputing missing, keeping top {TOP_K_STRAIN}...")
-    # Normalize case first (convert to string just in case, then lower)
+    # Normalize case first
     df_final[STRAIN_COL] = df_final[STRAIN_COL].astype(str).str.lower()
-    # Impute missing values (which are now represented by 'nan' string after astype(str)) with 'unknown'
+    # Impute missing values (now 'nan' string) with 'unknown'
     df_final[STRAIN_COL].replace('nan', 'unknown', inplace=True)
-    # df_final[STRAIN_COL].fillna('unknown', inplace=True) # Original fillna
 
     top_strains = df_final[STRAIN_COL].value_counts().nlargest(TOP_K_STRAIN).index.tolist()
-    # 'unknown' should be lowercase now if it exists
     if 'unknown' not in top_strains:
-        # Check if 'unknown' exists at all before trying to add
         if 'unknown' in df_final[STRAIN_COL].unique():
              top_strains.append('unknown') # Keep explicit unknown
 
@@ -199,7 +184,6 @@ def finalize_for_modeling(df: pd.DataFrame) -> pd.DataFrame:
 def save_data(df: pd.DataFrame, filepath: str):
     """Saves the processed DataFrame to a pickle file."""
     print("\n--- Saving Processed Data ---")
-    # Ensure the directory exists
     output_dir = os.path.dirname(filepath)
     if output_dir and not os.path.exists(output_dir):
         try:
@@ -208,16 +192,12 @@ def save_data(df: pd.DataFrame, filepath: str):
         except OSError as e:
             print(f"Error creating directory {output_dir}: {e}")
             # Decide if script should exit or just warn
-            # sys.exit(1)
 
     try:
         df.to_pickle(filepath)
-        # df.to_csv(filepath, index=False) # Changed to to_csv
         print(f"Processed data saved successfully to {filepath}")
     except Exception as e:
         print(f"Error saving processed data to {filepath}: {e}")
-        # Consider if this should be a critical error
-        # sys.exit(1)
 
 
 # --- New Function for Descriptor Handling ---
@@ -270,7 +250,7 @@ def main():
     print(f"Input file: {args.input_path}")
     print(f"Output file: {args.output_path}")
 
-    df = load_data(args.input_path) # Use input path from args
+    df = load_data(args.input_path)
     if df is None:
         return
 
@@ -283,9 +263,9 @@ def main():
     df_cleaned = clean_numeric_columns(df_handled, NUMERIC_COLS_TO_CONVERT)
     df_parsed = parse_dosage_column(df_cleaned, DOSAGE_COL)
     df_imputed_encoded_scaled = impute_encode_dosage(df_parsed)
-    df_final = finalize_for_modeling(df_imputed_encoded_scaled) # Descriptors should be kept by BASE_FEATURES_TO_KEEP
+    df_final = finalize_for_modeling(df_imputed_encoded_scaled)
 
-    save_data(df_final, args.output_path) # Use output path from args
+    save_data(df_final, args.output_path)
 
     print("\n--- Data Processing Script Finished ---")
 

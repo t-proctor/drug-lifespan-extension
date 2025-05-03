@@ -16,7 +16,6 @@ import argparse
 from scipy.stats import uniform, randint # Added for parameter distributions
 
 # --- Configuration ---
-# MODEL_OUTPUT_DIR = 'models' # Defined later based on model name
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 N_CV_FOLDS = 5 # Number of folds for cross-validation within tuning
@@ -24,26 +23,25 @@ N_TUNING_ITER = 50 # Number of parameter settings to sample in RandomizedSearch
 
 # Define target and feature columns based on the processed data
 TARGET_COL = 'avg_lifespan_change_percent'
-DOSAGE_VALUE_COL = 'dosage_value' # Explicitly define dosage value col
-DESCRIPTOR_COLS = ['LogP', 'TPSA', 'MolWt', 'NumHDonors', 'NumHAcceptors'] # Added descriptor columns
+DOSAGE_VALUE_COL = 'dosage_value'
+DESCRIPTOR_COLS = ['LogP', 'TPSA', 'MolWt', 'NumHDonors', 'NumHAcceptors']
 
-# --- Main Function ---
 def main():
     parser = argparse.ArgumentParser(description="Train and tune a lifespan prediction model.")
     parser.add_argument('--input_path', type=str, required=True,
                         help="Path to the processed input PKL file (e.g., with imputed descriptors).")
-    parser.add_argument('--data_source', type=str, choices=['chem_imputed', 'drugage_only'], default='chem_imputed',
-                        help="Specify data to use: 'chem_imputed' (use descriptors) or 'drugage_only' (drop descriptors).")
-    # Remove model_name arg, derive from input path and tuning status
-    # parser.add_argument('--model_name', type=str, default='hgb_lifespan_model',
-    #                     help="Base name for the saved model file (without extension).")
+    parser.add_argument('--data_source', type=str, choices=['with_descriptors', 'no_descriptors'], default='with_descriptors',
+                        help="Specify data to use: 'with_descriptors' (use chem descriptors) or 'no_descriptors' (drop descriptors).")
     args = parser.parse_args()
 
-    # Define output directory based on input file name and data source
-    input_basename = os.path.splitext(os.path.basename(args.input_path))[0]
-    # Replace potentially problematic chars in basename if needed, though usually fine
-    safe_basename = input_basename.replace('processed_', '') # Make it shorter
-    MODEL_OUTPUT_DIR = f'models/{safe_basename}_{args.data_source}_tuned'
+    # Define output directory based on data source
+    if args.data_source == 'with_descriptors':
+        MODEL_OUTPUT_DIR = 'models/drug_age_w_descriptors'
+    elif args.data_source == 'no_descriptors':
+        MODEL_OUTPUT_DIR = 'models/drug_age_only'
+    else:
+        raise ValueError(f"Invalid data_source: {args.data_source}")
+
     os.makedirs(MODEL_OUTPUT_DIR, exist_ok=True) # Ensure output dir exists
 
     print(f"--- Starting Model Training & Tuning --- ")
@@ -52,7 +50,6 @@ def main():
     print(f"Output directory: {MODEL_OUTPUT_DIR}")
     print(f"Tuning iterations: {N_TUNING_ITER}, CV folds: {N_CV_FOLDS}")
 
-    # --- Data Loading and Preparation (same as before) ---
     print(f"Loading processed data from {args.input_path}...")
     try:
         df = pd.read_pickle(args.input_path)
@@ -64,17 +61,16 @@ def main():
         sys.exit(1)
 
     print(f"Data loaded successfully. Shape: {df.shape}")
-    # print(f"Columns: {df.columns.tolist()}") # Keep output cleaner
 
     # --- Conditionally Drop Descriptors ---
-    if args.data_source == 'drugage_only':
+    if args.data_source == 'no_descriptors':
         cols_to_drop = [col for col in DESCRIPTOR_COLS if col in df.columns]
         if cols_to_drop:
-            print(f"Data source is 'drugage_only'. Dropping descriptor columns: {cols_to_drop}...")
+            print(f"Data source is '{args.data_source}'. Dropping descriptor columns: {cols_to_drop}...")
             df = df.drop(columns=cols_to_drop)
             print(f"DataFrame shape after dropping descriptors: {df.shape}")
         else:
-            print("Data source is 'drugage_only', but no descriptor columns found to drop.")
+            print(f"Data source is '{args.data_source}', but no descriptor columns found to drop.")
 
     if TARGET_COL not in df.columns:
         print(f"Error: Target column '{TARGET_COL}' not found in the input data.", file=sys.stderr)
@@ -82,7 +78,7 @@ def main():
     X = df.drop(columns=[TARGET_COL])
     y = df[TARGET_COL]
 
-    # Dynamically identify feature types (same as before)
+    # Dynamically identify feature types
     all_cols = X.columns.tolist()
     categorical_features_present = [col for col in ['species', 'strain', 'gender', 'ITP'] if col in all_cols]
     high_cardinality_features_present = ['compound_name'] if 'compound_name' in all_cols else []
@@ -92,11 +88,6 @@ def main():
     dose_cols_present = [col for col in all_cols if col.startswith('dose_')]
     passthrough_cols = descriptor_cols_present + dose_cols_present
 
-    # print(f"Identified Low Cardinality Categorical Features: {low_cardinality_features_present}")
-    # print(f"Identified High Cardinality Categorical Features: {high_cardinality_features_present}")
-    # print(f"Identified Dosage Value Feature (for scaling): {dosage_value_col_present}")
-    # print(f"Identified Passthrough Features (Descriptors + Dose dummies): {passthrough_cols}")
-    # print(f"Target column: {TARGET_COL}")
 
     print(f"Splitting data into train/test sets (test_size={TEST_SIZE}, random_state={RANDOM_STATE})...")
     X_train, X_test, y_train, y_test = train_test_split(
@@ -104,7 +95,7 @@ def main():
     )
     print(f"Train set shape: {X_train.shape}, Test set shape: {X_test.shape}")
 
-    # --- Preprocessing Pipeline Definition (same as before) ---
+    # --- Preprocessing Pipeline Definition ---
     target_encoder = ce.TargetEncoder(cols=high_cardinality_features_present, handle_missing='value', handle_unknown='value')
     one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
     scaler = StandardScaler()
@@ -133,7 +124,6 @@ def main():
     # --- Hyperparameter Tuning Setup ---
     print("\n--- Setting up Hyperparameter Tuning (RandomizedSearchCV) ---")
     # Define parameter distributions to sample from
-    # Note: Access pipeline steps using __ syntax: 'step_name__parameter_name'
     param_dist = {
         'regressor__learning_rate': uniform(0.01, 0.3), # Learning rate between 0.01 and 0.31
         'regressor__max_iter': randint(100, 500), # Number of boosting iterations (trees)
@@ -141,9 +131,6 @@ def main():
         'regressor__max_depth': [None] + list(randint(3, 15).rvs(5)), # Max depth (None means unlimited until max_leaf_nodes) - sample a few depths
         'regressor__min_samples_leaf': randint(10, 50), # Min samples required at a leaf node
         'regressor__l2_regularization': uniform(0, 1.0), # L2 regularization strength
-        # 'regressor__early_stopping': [True], # Consider enabling early stopping
-        # 'regressor__validation_fraction': [0.1], # Used if early_stopping=True
-        # 'regressor__n_iter_no_change': [10] # Used if early_stopping=True
     }
 
     # Define the cross-validation strategy for tuning
@@ -152,16 +139,15 @@ def main():
     # Define the scoring metric (maximize negative RMSE -> minimize RMSE)
     scoring = 'neg_root_mean_squared_error'
 
-    # Setup RandomizedSearchCV
     random_search = RandomizedSearchCV(
         estimator=pipeline,
         param_distributions=param_dist,
         n_iter=N_TUNING_ITER,
         cv=inner_cv,
         scoring=scoring,
-        n_jobs=-1, # Use all available CPU cores
+        n_jobs=-1,
         random_state=RANDOM_STATE,
-        verbose=1 # Show progress
+        verbose=1
     )
 
     # --- Run Tuning ---
@@ -205,27 +191,25 @@ def main():
 
     except Exception as e:
         print(f"Error during preprocessing or feature name retrieval for SHAP: {e}", file=sys.stderr)
-        sys.exit(1) # Exit if we can't get processed data for SHAP
+        sys.exit(1)
 
     # Use TreeExplainer with the regressor from the best pipeline
     print("Creating SHAP explainer...")
     explainer = shap.TreeExplainer(best_model.named_steps['regressor'])
     print("Calculating SHAP values for the test set...")
-    shap_values = explainer.shap_values(X_test_processed) # Pass numpy array or DataFrame
+    shap_values = explainer.shap_values(X_test_processed)
 
     print("Generating SHAP summary plot...")
-    # Use the DataFrame with feature names if available
     shap.summary_plot(shap_values, X_test_processed_df, show=False) 
     
-    shap_plot_filename = f"shap_summary_tuned.png" # Simpler name for tuned model plot
+    shap_plot_filename = f"shap_summary_tuned.png"
     shap_plot_path = os.path.join(MODEL_OUTPUT_DIR, shap_plot_filename)
     plt.savefig(shap_plot_path, bbox_inches='tight')
     print(f"SHAP summary plot saved to {shap_plot_path}")
     plt.close()
 
     # --- Save Best Model --- 
-    # model_filename = f"{args.model_name}_{input_basename}_tuned.joblib" # Old naming
-    model_filename = f"best_tuned_model.joblib" # Simpler name for the tuned model
+    model_filename = f"best_tuned_model.joblib"
     model_path = os.path.join(MODEL_OUTPUT_DIR, model_filename)
     print(f"\nSaving best tuned model pipeline to {model_path}...")
     joblib.dump(best_model, model_path)
