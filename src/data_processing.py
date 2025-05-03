@@ -4,10 +4,11 @@ import seaborn as sns
 import os
 import re
 import sys # For exit
+import argparse # Added import
 from sklearn.preprocessing import StandardScaler # Added import
 
 # Import dosage parsing logic
-from .dosage_parser import parse_dosage_column, DOSAGE_VALUE_COL, DOSAGE_UNIT_COL
+from dosage_parser import parse_dosage_column, DOSAGE_VALUE_COL, DOSAGE_UNIT_COL
 
 # Determine the script's directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,10 +17,11 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR) # Assumes src is one level down from 
 # --- Constants ---
 # RAW_DATA_PATH = '../data/raw/drugage.csv' # Original relative path
 # PROCESSED_DATA_PATH = '../data/processed/processed_drugage.pkl' # Original relative path
-RAW_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'raw', 'drugage.csv')
+RAW_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'drug_descriptors.csv') # Updated input path
 # PROCESSED_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'processed_drugage.pkl')
-PROCESSED_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'processed_drugage.pkl') # Reverted to pkl
+PROCESSED_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'processed', 'processed_drugage.pkl') # Default output, but will be overridden by args
 NUMERIC_COLS_TO_CONVERT = ['avg_lifespan_change_percent', 'max_lifespan_change_percent', 'weight_change_percent']
+DESCRIPTOR_COLS = ['LogP', 'TPSA', 'MolWt', 'NumHDonors', 'NumHAcceptors'] # Added descriptor columns
 DOSAGE_COL = 'dosage'
 TARGET_COL = 'avg_lifespan_change_percent' # Define target column
 STRAIN_COL = 'strain' # Define strain column
@@ -31,7 +33,7 @@ BASE_FEATURES_TO_KEEP = [
     'compound_name', 'species', STRAIN_COL, 'gender', 'ITP', # Categorical
     DOSAGE_VALUE_COL, # Numeric dosage
     TARGET_COL # Target variable
-]
+] + DESCRIPTOR_COLS # Add descriptor columns here
 # Dynamic dose columns (like 'dose_molarity') will be added later
 
 # Configure visualization style
@@ -218,20 +220,72 @@ def save_data(df: pd.DataFrame, filepath: str):
         # sys.exit(1)
 
 
+# --- New Function for Descriptor Handling ---
+def handle_descriptors(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
+    """Handles missing descriptor values based on the chosen strategy."""
+    print(f"\n--- Handling Missing Descriptors (Strategy: {strategy}) ---")
+    df_processed = df.copy()
+    missing_before = df_processed[DESCRIPTOR_COLS].isnull().sum()
+    print("Missing descriptor values before handling:")
+    print(missing_before[missing_before > 0]) # Only show columns with missing values
+
+    if strategy == 'drop':
+        initial_rows = len(df_processed)
+        df_processed.dropna(subset=DESCRIPTOR_COLS, inplace=True)
+        rows_dropped = initial_rows - len(df_processed)
+        print(f"Dropped {rows_dropped} rows with missing descriptor values.")
+    elif strategy == 'impute':
+        imputed_count = 0
+        for col in DESCRIPTOR_COLS:
+            if df_processed[col].isnull().any():
+                median_val = df_processed[col].median()
+                count = df_processed[col].isnull().sum()
+                print(f"  - Imputing {count} missing values in '{col}' with median ({median_val:.4g})")
+                df_processed[col].fillna(median_val, inplace=True)
+                imputed_count += count
+        print(f"Imputed a total of {imputed_count} missing descriptor values.")
+    else:
+        print(f"Warning: Unknown strategy '{strategy}'. No action taken for descriptors.")
+
+    missing_after = df_processed[DESCRIPTOR_COLS].isnull().sum().sum()
+    print(f"Total missing descriptor values after handling: {missing_after}")
+    print(f"DataFrame shape after handling descriptors: {df_processed.shape}")
+    return df_processed
+
+
 # --- Main Execution ---
 def main():
     """Main function to run the data processing pipeline."""
-    df = load_data(RAW_DATA_PATH)
+    parser = argparse.ArgumentParser(description="Process drug lifespan data, handling chemical descriptors.")
+    parser.add_argument('--input_path', type=str, default=RAW_DATA_PATH,
+                        help=f"Path to the input CSV file (default: {RAW_DATA_PATH})")
+    parser.add_argument('--output_path', type=str, required=True,
+                        help="Path to save the processed output PKL file.")
+    parser.add_argument('--strategy', type=str, choices=['drop', 'impute'], default='impute',
+                        help="Strategy to handle missing descriptors ('drop' or 'impute', default: impute)")
+
+    args = parser.parse_args()
+
+    print(f"Starting data processing with strategy: {args.strategy}")
+    print(f"Input file: {args.input_path}")
+    print(f"Output file: {args.output_path}")
+
+    df = load_data(args.input_path) # Use input path from args
     if df is None:
-        # Error message printed in load_data, already exited
         return
 
     display_basic_info(df)
-    df_cleaned = clean_numeric_columns(df, NUMERIC_COLS_TO_CONVERT)
+
+    # Handle descriptors first
+    df_handled = handle_descriptors(df, args.strategy)
+
+    # Continue with existing pipeline steps
+    df_cleaned = clean_numeric_columns(df_handled, NUMERIC_COLS_TO_CONVERT)
     df_parsed = parse_dosage_column(df_cleaned, DOSAGE_COL)
     df_imputed_encoded_scaled = impute_encode_dosage(df_parsed)
-    df_final = finalize_for_modeling(df_imputed_encoded_scaled)
-    save_data(df_final, PROCESSED_DATA_PATH)
+    df_final = finalize_for_modeling(df_imputed_encoded_scaled) # Descriptors should be kept by BASE_FEATURES_TO_KEEP
+
+    save_data(df_final, args.output_path) # Use output path from args
 
     print("\n--- Data Processing Script Finished ---")
 

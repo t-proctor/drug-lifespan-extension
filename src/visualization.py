@@ -6,9 +6,13 @@ import os
 
 # Configure visualization style
 sns.set_theme(style="whitegrid")
+sns.set_palette("Greens") # Set Greens as the global palette
 
-# Define output directory for plots (relative to this script)
-plots_dir = '../reports/figures' # NEW PATH
+# Define output directory for plots (using absolute path)
+# plots_dir = '../reports/figures' # Back to original path
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+plots_dir = os.path.join(PROJECT_ROOT, 'reports', 'figures')
 if not os.path.exists(plots_dir):
     os.makedirs(plots_dir)
     print(f"Created directory: {plots_dir}")
@@ -38,6 +42,35 @@ def _save_plot(plt_obj, filename, directory):
     finally:
         plt_obj.close() # Ensure plot is closed even if save fails
 
+def plot_metric_comparison(metric_name, data, filename, directory):
+    """Generates and saves a bar plot comparing model performance metrics."""
+    plt.figure(figsize=(10, 6))
+    model_names = list(data.keys())
+    metric_values = list(data.values())
+
+    bars = sns.barplot(x=model_names, y=metric_values, palette="Greens")
+
+    # Add metric values on top of bars
+    for bar in bars.patches:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom', ha='center') # adjust position and format
+
+    # Use RMSE or R-squared in the title/labels as appropriate
+    ylabel = metric_name
+    title = f'Model Comparison: {metric_name}'
+    if metric_name == "RMSE":
+        ylabel = "RMSE (Test)"
+        title = "Model Comparison: Root Mean Squared Error (Test)"
+    elif metric_name == "R2":
+        ylabel = "R² (Test)"
+        title = "Model Comparison: R-squared (Test)"
+
+
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.xticks(rotation=15, ha='right') # Rotate labels slightly for better readability
+    plt.tight_layout()
+    _save_plot(plt, filename, directory)
 
 # --- Data Loading ---
 print("--- Loading Processed Data ---")
@@ -205,6 +238,48 @@ for cat_col in categorical_cols:
             # This case might occur if top_n filtering resulted in empty df_plot
             print(f"  - Skipping boxplot for {life_col} vs {cat_col} (No data after filtering top categories)")
             plt.close()
+
+
+# 4. Model Performance Comparison Plots
+print("\n--- Generating Model Performance Comparison Plots ---")
+
+# Data from user message (RMSE needs to be converted to MSE)
+# | Model Name               | R² (Test) | RMSE (Test) |
+# |--------------------------|-----------|-------------|
+# | drugage_only_untuned     | 0.1971    | 18.3527     |
+# | drugage_only_tuned       | 0.1957    | 18.3684     |
+# | chem_untuned (Imputed)   | 0.2143    | 18.1547     |
+# | chem_tuned (Imputed)     | 0.2286    | 17.9890     |
+
+# Updated keys to match new naming convention
+model_metrics = {
+    'drugage_only_untuned': {'R2': 0.1971, 'RMSE': 18.3527},
+    'drugage_only_tuned': {'R2': 0.1957, 'RMSE': 18.3684},
+    'chem_imputed_untuned': {'R2': 0.2143, 'RMSE': 18.1547},
+    'chem_imputed_tuned': {'R2': 0.2286, 'RMSE': 17.9890}
+}
+
+# Prepare data for plotting
+r_squared_data = {name: metrics['R2'] for name, metrics in model_metrics.items()}
+# Calculate MSE from RMSE (MSE = RMSE^2)
+mse_data = {name: metrics['RMSE']**2 for name, metrics in model_metrics.items()}
+
+
+# Plot R-squared Comparison
+plot_metric_comparison(
+    metric_name="R2",
+    data=r_squared_data,
+    filename="model_comparison_r_squared.png",
+    directory=plots_dir
+)
+
+# Plot MSE Comparison
+plot_metric_comparison(
+    metric_name="MSE",
+    data=mse_data,
+    filename="model_comparison_mse.png",
+    directory=plots_dir
+)
 
 
 print("\n--- Visualization Script Finished ---") 
