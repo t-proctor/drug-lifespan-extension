@@ -18,10 +18,14 @@ if not os.path.exists(plots_dir):
 
 # --- Helper Functions ---
 
+
 def _format_title(col_name, prefix="Distribution of", suffix=""):
     """Formats a column name into a plot title."""
-    formatted_name = col_name.replace("_percent", " (%)").replace("_", " ").title()
+    formatted_name = col_name.replace(
+        "_percent", " (%)"
+    ).replace("_", " ").title()
     return f"{prefix} {formatted_name}{suffix}"
+
 
 def _save_plot(plt_obj, filename, directory):
     """Saves the current matplotlib plot to a file."""
@@ -41,6 +45,7 @@ def _save_plot(plt_obj, filename, directory):
     finally:
         plt_obj.close()
 
+
 def plot_metric_comparison(metric_name, data, filename, directory):
     """Generates and saves a bar plot comparing model performance metrics."""
     plt.figure(figsize=(10, 6))
@@ -52,7 +57,10 @@ def plot_metric_comparison(metric_name, data, filename, directory):
     # Add metric values on top of bars
     for bar in bars.patches:
         yval = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom', ha='center')
+        plt.text(
+            bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}',
+            va='bottom', ha='center'
+        )
 
     # Use RMSE or R-squared in the title/labels as appropriate
     ylabel = metric_name
@@ -64,12 +72,12 @@ def plot_metric_comparison(metric_name, data, filename, directory):
         ylabel = "R² (Test)"
         title = "Model Comparison: R-squared (Test)"
 
-
     plt.ylabel(ylabel)
     plt.title(title)
     plt.xticks(rotation=15, ha='right')
     plt.tight_layout()
     _save_plot(plt, filename, directory)
+
 
 # --- Data Loading ---
 print("--- Loading Processed Data ---")
@@ -114,7 +122,10 @@ for col in lifespan_cols:
             plot_successful_lifespan = True
             subplot_index += 1
         else:
-             print(f"  - Skipping plot for column '{col}' (no valid data after dropping NaN/inf).")
+            print(
+                f"  - Skipping plot for column '{col}' "
+                f"(no valid data after dropping NaN/inf)."
+            )
     else:
         print(f"  - Skipping plot for non-numeric or missing column: {col}")
 
@@ -149,8 +160,13 @@ for col in categorical_cols:
             top_categories = value_counts.nlargest(top_n).index
             data_to_plot = col_data[col_data.isin(top_categories)]
             sns.countplot(y=data_to_plot, order=top_categories)
-            plot_title = _format_title(col, prefix=f"Top {top_n}", suffix=" Counts")
-            print(f"  - Plotting: {plot_title} (limited due to high cardinality)")
+            plot_title = _format_title(
+                col, prefix=f"Top {top_n}", suffix=" Counts"
+            )
+            print(
+                f"  - Plotting: {plot_title} "
+                "(limited due to high cardinality)"
+            )
         else:
             order = value_counts.index
             sns.countplot(y=col_data, order=order)
@@ -163,19 +179,27 @@ for col in categorical_cols:
         _save_plot(plt, plot_filename, plots_dir)
 
     else:
-         print(f"  - Skipping count plot for missing or empty column: {col}")
+        print(f"  - Skipping count plot for missing or empty column: {col}")
 
 
 # 3. Lifespan Change vs. Categorical Features (Boxplots)
 print("\n--- Generating Lifespan Change vs Categorical Plots ---")
 for cat_col in categorical_cols:
     if cat_col not in df.columns or df[cat_col].isnull().all():
-        print(f"  - Skipping boxplots involving {cat_col} (Categorical column missing or empty)")
+        print(
+            f"  - Skipping boxplots involving {cat_col} "
+            "(Categorical column missing or empty)"
+        )
         continue
 
     for life_col in lifespan_cols:
-        if life_col not in df.columns or not pd.api.types.is_numeric_dtype(df[life_col]) or df[life_col].isnull().all():
-            print(f"  - Skipping boxplot for {life_col} vs {cat_col} (Lifespan column missing, non-numeric, or empty)")
+        if (life_col not in df.columns or
+                not pd.api.types.is_numeric_dtype(df[life_col]) or
+                df[life_col].isnull().all()):
+            print(
+                f"  - Skipping boxplot for {life_col} vs {cat_col} "
+                "(Lifespan column missing, non-numeric, or empty)"
+            )
             continue
 
         # Prepare data
@@ -184,7 +208,10 @@ for cat_col in categorical_cols:
         df_clean = df_clean.replace([np.inf, -np.inf], np.nan).dropna()
 
         if df_clean.empty:
-            print(f"  - Skipping boxplot for {life_col} vs {cat_col} (No valid data after cleaning)")
+            print(
+                f"  - Skipping boxplot for {life_col} vs {cat_col} "
+                "(No valid data after cleaning)"
+            )
             continue
 
         plt.figure(figsize=(12, 9))
@@ -199,7 +226,10 @@ for cat_col in categorical_cols:
         median_values = df_clean.groupby(cat_col)[life_col].median()
 
         if median_values.empty:
-            print(f"  - Skipping boxplot for {life_col} vs {cat_col} (Could not calculate medians for ordering/filtering)")
+            print(
+                f"  - Skipping boxplot for {life_col} vs {cat_col} "
+                "(Could not calculate medians for ordering/filtering)"
+            )
             plt.close()
             continue
 
@@ -224,7 +254,10 @@ for cat_col in categorical_cols:
             plot_filename = f'{life_col}_vs_{cat_col}_boxplot.png'
             _save_plot(plt, plot_filename, plots_dir)
         else:
-            print(f"  - Skipping boxplot for {life_col} vs {cat_col} (No data after filtering top categories)")
+            print(
+                f"  - Skipping boxplot for {life_col} vs {cat_col} "
+                "(No data after filtering top categories)"
+            )
             plt.close()
 
 
@@ -240,8 +273,10 @@ model_metrics = {
 }
 
 # Prepare data for plotting
-r_squared_data = {name: metrics['R2'] for name, metrics in model_metrics.items()}
-mse_data = {name: metrics['RMSE']**2 for name, metrics in model_metrics.items()}
+r_squared_data = {name: metrics['R2']
+                  for name, metrics in model_metrics.items()}
+mse_data = {name: metrics['RMSE']**2 for name,
+            metrics in model_metrics.items()}
 
 
 # Plot R-squared Comparison
@@ -261,4 +296,4 @@ plot_metric_comparison(
 )
 
 
-print("\n--- Visualization Script Finished ---") 
+print("\n--- Visualization Script Finished ---")

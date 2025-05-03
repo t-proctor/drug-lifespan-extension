@@ -6,8 +6,10 @@ from tqdm import tqdm
 import time
 import os
 
+
 def get_smiles_from_name(name):
-    """Attempts to retrieve canonical SMILES from PubChem using compound name."""
+    """Attempts to retrieve canonical SMILES from PubChem
+        using compound name."""
     try:
         compounds = pcp.get_compounds(name, 'name')
         if compounds:
@@ -16,8 +18,9 @@ def get_smiles_from_name(name):
         print(f"Error retrieving SMILES for '{name}': {e}")
     return None
 
+
 def calculate_descriptors(smiles):
-    """Calculates desired descriptors from SMILES using RDKit."""
+    """Calculates desired descriptors from RDKit."""
     if not smiles:
         return None
     mol = Chem.MolFromSmiles(smiles)
@@ -29,10 +32,14 @@ def calculate_descriptors(smiles):
         molwt = Descriptors.MolWt(mol)
         hdonors = Descriptors.NumHDonors(mol)
         hacceptors = Descriptors.NumHAcceptors(mol)
-        return {'LogP': logp, 'TPSA': tpsa, 'MolWt': molwt, 'NumHDonors': hdonors, 'NumHAcceptors': hacceptors}
+        return {
+            'LogP': logp, 'TPSA': tpsa, 'MolWt': molwt,
+            'NumHDonors': hdonors, 'NumHAcceptors': hacceptors
+        }
     except Exception as e:
         print(f"Error calculating descriptors for SMILES '{smiles}': {e}")
         return None
+
 
 def main():
     input_csv = 'data/raw/drugage.csv'
@@ -68,7 +75,10 @@ def main():
             if descriptors:
                 descriptor_cache[name] = descriptors
             else:
-                print(f"Could not calculate descriptors for '{name}' (SMILES: {smiles})")
+                print(
+                    f"Could not calculate descriptors for '{name}' "
+                    f"(SMILES: {smiles})"
+                )
                 failed_lookups.append(name)
         else:
             print(f"Could not find SMILES for '{name}' on PubChem.")
@@ -79,12 +89,19 @@ def main():
 
     print(f"\nSuccessfully processed {len(descriptor_cache)} compounds.")
     if failed_lookups:
-        print(f"Failed to process {len(failed_lookups)} compounds: {', '.join(failed_lookups[:10])}{'...' if len(failed_lookups) > 10 else ''}")
+        failed_str = ", ".join(failed_lookups[:10])
+        ellipsis = "..." if len(failed_lookups) > 10 else ""
+        print(
+            f"Failed to process {len(failed_lookups)} compounds: "
+            f"{failed_str}{ellipsis}"
+        )
 
     # Create new columns in the DataFrame
     descriptor_cols = ['LogP', 'TPSA', 'MolWt', 'NumHDonors', 'NumHAcceptors']
     for col in descriptor_cols:
-        df[col] = df['compound_name'].map(lambda name: descriptor_cache.get(name, {}).get(col, None))
+        df[col] = df['compound_name'].map(
+            lambda name: descriptor_cache.get(name, {}).get(col, None)
+        )
 
     # Ensure the output directory exists
     output_dir = os.path.dirname(output_csv)
@@ -99,5 +116,6 @@ def main():
     except Exception as e:
         print(f"Error saving output CSV: {e}")
 
+
 if __name__ == "__main__":
-    main() 
+    main()
