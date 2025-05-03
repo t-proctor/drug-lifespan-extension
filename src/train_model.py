@@ -1,7 +1,5 @@
 import pandas as pd
 import numpy as np
-import shap
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, KFold
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_squared_error, r2_score
@@ -45,9 +43,9 @@ def main():
 
     # Define output directory based on data source
     if args.data_source == 'with_descriptors':
-        MODEL_OUTPUT_DIR = 'models/drug_age_w_descriptors'
+        MODEL_OUTPUT_DIR = 'models/drug_age_w_descriptors_tuned'
     elif args.data_source == 'no_descriptors':
-        MODEL_OUTPUT_DIR = 'models/drug_age_only'
+        MODEL_OUTPUT_DIR = 'models/drug_age_only_tuned'
     else:
         raise ValueError(f"Invalid data_source: {args.data_source}")
 

@@ -19,7 +19,7 @@ RAW_DATA_PATH = os.path.join(
     PROJECT_ROOT, 'data', 'processed', 'drug_descriptors.csv'
 )
 PROCESSED_DATA_PATH = os.path.join(
-    PROJECT_ROOT, 'data', 'processed', 'processed_drugage.pkl'
+    PROJECT_ROOT, 'data', 'processed', 'processed_drug_age.pkl'
 )
 NUMERIC_COLS_TO_CONVERT = [
     'avg_lifespan_change_percent',
