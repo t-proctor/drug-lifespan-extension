@@ -251,12 +251,11 @@ print("\n--- Generating Model Performance Comparison Plots ---")
 # | chem_untuned (Imputed)   | 0.2143    | 18.1547     |
 # | chem_tuned (Imputed)     | 0.2286    | 17.9890     |
 
-# Updated keys to match new naming convention
 model_metrics = {
-    'drugage_only_untuned': {'R2': 0.1971, 'RMSE': 18.3527},
-    'drugage_only_tuned': {'R2': 0.1957, 'RMSE': 18.3684},
-    'chem_imputed_untuned': {'R2': 0.2143, 'RMSE': 18.1547},
-    'chem_imputed_tuned': {'R2': 0.2286, 'RMSE': 17.9890}
+    'DrugAge Only': {'R2': 0.1971, 'RMSE': 18.3527},
+    'DrugAge Only (Tuned)': {'R2': 0.1957, 'RMSE': 18.3684},
+    'DrugAge + Chem': {'R2': 0.2143, 'RMSE': 18.1547},
+    'DrugAge + Chem (Tuned)': {'R2': 0.2286, 'RMSE': 17.9890}
 }
 
 # Prepare data for plotting

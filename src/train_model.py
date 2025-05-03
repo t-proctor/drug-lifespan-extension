@@ -40,11 +40,10 @@ def main():
     args = parser.parse_args()
 
     # Define output directory based on input file name and data source
-    # input_basename = os.path.splitext(os.path.basename(args.input_path))[0]
+    input_basename = os.path.splitext(os.path.basename(args.input_path))[0]
     # Replace potentially problematic chars in basename if needed, though usually fine
-    # safe_basename = input_basename.replace('processed_', '') # Make it shorter
-    # MODEL_OUTPUT_DIR = f'models/{safe_basename}_{args.data_source}_tuned' # OLD WAY
-    MODEL_OUTPUT_DIR = f'models/{args.data_source}_tuned' # NEW, SIMPLER WAY
+    safe_basename = input_basename.replace('processed_', '') # Make it shorter
+    MODEL_OUTPUT_DIR = f'models/{safe_basename}_{args.data_source}_tuned'
     os.makedirs(MODEL_OUTPUT_DIR, exist_ok=True) # Ensure output dir exists
 
     print(f"--- Starting Model Training & Tuning --- ")
