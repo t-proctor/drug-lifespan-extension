@@ -17,7 +17,6 @@ It involves:
 │   └── processed/        # Processed data files (descriptors, final pkl)
 ├── models/
 │   └── drug_age_w_descriptors_tuned/ # Models trained with imputed descriptors
-├── notebooks/            # (Optional) Jupyter notebooks for exploration
 ├── reports/
 │   └── figures/          # Generated plots (distributions, comparisons, SHAP)
 ├── scripts/
